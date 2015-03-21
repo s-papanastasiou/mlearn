@@ -1,0 +1,51 @@
+---
+title: "Analysis Report"
+output: pdf_document
+---
+## Description
+This report describes the development of a prediction model for Human Activity Recognition data as part of the Coursera Machine Learning course. The data was obtained from http://groupware.les.inf.puc-rio.br/har. This report contains a description of the analysis process and outlines what the expected accuracy of the model is.
+
+## Import and Model
+The source data was imported using the standard R tools. Some data clean-up was necessary as follows.
+
+### Division by zero entries
+Before hand a number of entries with the mark #DIV/0!" were replaced by NA, as the "#DIV/0!" indicates an error which in R terms means data not available.
+
+### Columns of significance
+The training dataset contains 159 possible predictors that characterise the outcome. However, many of these contain a great amount of undefined (or not available) values, which makes them candidates for deletion. In particular, the following columns have over 19000 entries set to NA (or less than 3% of the data in them is meaningful). Conservatively, we can eliminate those from consideration. The remaining columns (or predictors) are as follows:
+```{r, echo=TRUE}
+rdata <- read.csv("pml-training.csv", header=TRUE, sep=",")
+names(rdata[,colSums(is.na(rdata))< 19000])
+```
+
+So we are considering 59 predictors out of the 159 original ones.
+
+### Training and Model
+We do a 60-40 partition split of the training data into training and testing data. We do this to ensure that we have adequate testing data and avoid overfitting. 
+```{r, eval=FALSE}
+inTrain <- createDataPartition(y=rdata_clean_m$classe, p=0.60, list=FALSE)
+training <- rdata_clean_m[inTrain,]
+testing <- rdata_clean_m[-inTrain,]
+```
+We create a model using random forests. Random forests have been shown to produce powerful prediction models but are computationally intensive. Nonetheless, even with our modest hardware facilities we can derive a promisingly accurate model. We explored other models as well, using a sub-sample of the training data for exploratory purposes but found random forests to perform the best given certain computational time constraints.
+
+The model includes  Principal Componenets Analysis to combine some correlated predictors thereby reducing the number of predictors. The associated train control sets k-fold cross validation (to help with overfitting the data), with k=5. The number of trees to grow is set to 100. Both k and the number of trees were set to lower than default values due to hardware limitations.
+```{r, eval=FALSE}
+ctrl <-  trainControl(method="repeatedcv", number=5)
+modelFit <- train(classe~., data = training, method="rf", ntree=100, trControl=ctrl, preProcess="pca",prox=TRUE)
+```
+
+Note that the final model contains `r length(modelFit$finalModel$xNames)` PCA-derived predictors out of the 59 we started with. So via combining correlated predictors, 23 were eliminated.
+
+## Evaluating the model
+We test the model against the testing data and note the classification.
+```{r, eval=TRUE}
+load(file="analysis.RData")
+library("caret")
+predictions <- predict(modelFit, newdata=testing)
+confusionMatrix(predictions, testing$classe)
+```
+It seems that the model produces what can be described as satisfactory classification. All metrics for statistics per class seem quite high (over 95%) and the model has given a result of 18/20 accurate predictions in the accompanying exercise.
+
+## Results
+We derived a satisfactory random forest model for classifying activity according to certain predictors. The model achieved 90% correct classification on the final test data but greater accuracy could possibly have been achieved if we could develop the model further by considering larger forests and bigger k-fold values.
